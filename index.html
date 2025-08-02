@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Árbol de Decisión con Discretización Manual</title>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table, th, td { border: 1px solid #999; border-collapse: collapse; padding: 5px; }
+    table { margin-bottom: 20px; width: 100%; }
+    th { background-color: #f0f0f0; }
+    #resultados { background: #f9f9f9; border: 1px solid #ccc; padding: 15px; }
+    .discretization-config { background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    .range-input { margin: 5px 0; }
+    .numeric-attr { border-left: 3px solid #007acc; padding-left: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Árbol de Decisión con Discretización Manual</h1>
+
+  <h2>1. Cargar archivo Excel</h2>
+  <input type="file" id="excelFile" accept=".xlsx, .xls" /><br><br>
+
+  <h2>2. Carga Manual</h2>
+  <label>Número de atributos (3 a 5):</label>
+  <input type="number" id="numAttrs" min="3" max="5" value="3">
+  <button onclick="generarFormulario()">Generar Atributos</button>
+
+  <form id="atributosForm" style="margin-top:20px;"></form>
+  <div id="tablaManual"></div>
+
+  <h2>3. Tabla de Datos</h2>
+  <div id="tablaOriginal"></div>
+
+  <h2>4. Resultados</h2>
+  <div id="resultados"></div>
+
+  <script>
+    let atributos = [];
+    let datosOriginales = [];
+    let configuracionDiscretizacion = {};
+
+    document.getElementById('excelFile').addEventListener('change', leerExcel);
+
+    function leerExcel(event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        datosOriginales = rows;
+        mostrarTablaOriginal(rows);
+        calcularEntropiaGanancia(rows);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function generarFormulario() {
+      const n = parseInt(document.getElementById("numAttrs").value);
+      const form = document.getElementById("atributosForm");
+      form.innerHTML = '';
+      atributos = [];
+
+      for (let i = 0; i < n - 1; i++) {
+        form.innerHTML += `<h4>Atributo ${i + 1}</h4>`;
+        form.innerHTML += `<label>Nombre: <input type="text" id="nombre${i}" value="A${i + 1}"></label><br>`;
+        form.innerHTML += `
+          <label>Tipo:
+            <select id="tipo${i}" onchange="mostrarConfiguracionRangos(${i})">
+              <option value="nominal">Nominal</option>
+              <option value="numerico">Numérico</option>
+            </select>
+          </label><br>
+          <div id="configRangos${i}" style="display:none; background:#e8f4fd; padding:10px; margin:10px 0; border-radius:5px;">
+            <h5>Configurar valores de corte para este atributo:</h5>
+            <label>X1 (valor mínimo): <input type="number" id="x1_${i}" value="10" step="0.1"></label><br><br>
+            <label>X2 (valor máximo): <input type="number" id="x2_${i}" value="40" step="0.1"></label><br><br>
+            <div id="preview${i}" style="background:#fff; padding:8px; border-radius:3px; font-weight:bold;">
+              Rangos generados: &lt;<span id="previewX1_${i}">10</span>, <span id="previewX1_${i}_2">10</span>-<span id="previewX2_${i}">40</span>, &gt;<span id="previewX2_${i}_2">40</span>
+            </div>
+          </div><hr>
+        `;
+      }
+
+      form.innerHTML += `<button type="button" onclick="crearTablaManual()">Crear tabla de instancias</button>`;
+
+      // Agregar listeners después de crear los elementos
+      for (let i = 0; i < n - 1; i++) {
+        const tipoSelect = document.getElementById(`tipo${i}`);
+        if (tipoSelect) {
+          tipoSelect.addEventListener('change', () => mostrarConfiguracionRangos(i));
+        }
+        const x1 = document.getElementById(`x1_${i}`);
+        const x2 = document.getElementById(`x2_${i}`);
+        if (x1) x1.addEventListener('input', () => actualizarPreview(i));
+        if (x2) x2.addEventListener('input', () => actualizarPreview(i));
+      }
+    }
+
+    function mostrarConfiguracionRangos(attrIndex) {
+      const tipoSelect = document.getElementById(`tipo${attrIndex}`);
+      const configDiv = document.getElementById(`configRangos${attrIndex}`);
+      
+      if (tipoSelect.value === "numerico") {
+        configDiv.style.display = "block";
+        actualizarPreview(attrIndex);
+      } else {
+        configDiv.style.display = "none";
+      }
+    }
+
+    function actualizarPreview(attrIndex) {
+      const x1 = document.getElementById(`x1_${attrIndex}`).value || 10;
+      const x2 = document.getElementById(`x2_${attrIndex}`).value || 40;
+      
+      // Actualizar todos los elementos del preview
+      const elementsX1 = document.querySelectorAll(`#previewX1_${attrIndex}, #previewX1_${attrIndex}_2`);
+      const elementsX2 = document.querySelectorAll(`#previewX2_${attrIndex}, #previewX2_${attrIndex}_2`);
+      
+      elementsX1.forEach(el => el.textContent = x1);
+      elementsX2.forEach(el => el.textContent = x2);
+    }
+
+    function mostrarConfigDiscretizacion() {
+      const configDiv = document.getElementById("discretizationConfig");
+      let html = "<h3>Configuración de Discretización</h3>";
+      
+      const numAttrs = parseInt(document.getElementById("numAttrs").value) || 3;
+      let hayNumericos = false;
+
+      for (let i = 0; i < numAttrs - 1; i++) {
+        const tipoSelect = document.getElementById(`tipo${i}`);
+        const nombreInput = document.getElementById(`nombre${i}`);
+        
+        if (tipoSelect && tipoSelect.value === "numerico") {
+          hayNumericos = true;
+          const nombre = nombreInput ? nombreInput.value || `A${i + 1}` : `A${i + 1}`;
+          
+          html += `<div class="discretization-config numeric-attr">
+            <h4>Discretización para ${nombre}</h4>
+            <label>Número de rangos: 
+              <select id="numRangos${i}" onchange="generarRangos(${i})">
+                <option value="2">2 rangos</option>
+                <option value="3" selected>3 rangos</option>
+                <option value="4">4 rangos</option>
+              </select>
+            </label>
+            <div id="rangos${i}"></div>
+          </div>`;
+        }
+      }
+
+      if (!hayNumericos) {
+        html += "<p><em>No hay atributos numéricos configurados para discretizar.</em></p>";
+      }
+
+      configDiv.innerHTML = html;
+
+      // Generar rangos por defecto para atributos numéricos
+      for (let i = 0; i < numAttrs - 1; i++) {
+        const tipoSelect = document.getElementById(`tipo${i}`);
+        if (tipoSelect && tipoSelect.value === "numerico") {
+          generarRangos(i);
+        }
+      }
+    }
+
+    function generarRangos(attrIndex) {
+      const numRangos = parseInt(document.getElementById(`numRangos${attrIndex}`).value);
+      const rangosDiv = document.getElementById(`rangos${attrIndex}`);
+      
+      let html = "<h5>Define los rangos:</h5>";
+      
+      for (let r = 0; r < numRangos; r++) {
+        html += `<div class="range-input">
+          <label>Rango ${r + 1}: 
+            <input type="text" id="rango${attrIndex}_${r}" placeholder="Ej: <10, 10-40, >40" 
+                   value="${obtenerRangoPorDefecto(r, numRangos)}">
+          </label>
+        </div>`;
+      }
+      
+      rangosDiv.innerHTML = html;
+    }
+
+    function obtenerRangoPorDefecto(indice, total) {
+      if (total === 2) {
+        return indice === 0 ? "<30" : ">=30";
+      } else if (total === 3) {
+        if (indice === 0) return "<10";
+        if (indice === 1) return "10-40";
+        return ">40";
+      } else if (total === 4) {
+        if (indice === 0) return "<15";
+        if (indice === 1) return "15-30";
+        if (indice === 2) return "30-50";
+        return ">50";
+      }
+      return `Rango ${indice + 1}`;
+    }
+
+    function crearTablaManual() {
+      atributos = [];
+      configuracionDiscretizacion = {};
+      const numAttrs = parseInt(document.getElementById("numAttrs").value);
+      
+      // Recopilar información de atributos y valores de corte
+      for (let i = 0; i < numAttrs - 1; i++) {
+        const nombre = document.getElementById(`nombre${i}`).value || `A${i + 1}`;
+        const tipo = document.getElementById(`tipo${i}`).value;
+        atributos.push({ nombre, tipo, indice: i });
+        
+        // Si es numérico, recopilar X1 y X2 y generar los 3 rangos
+        if (tipo === "numerico") {
+          const x1 = parseFloat(document.getElementById(`x1_${i}`).value) || 10;
+          const x2 = parseFloat(document.getElementById(`x2_${i}`).value) || 40;
+          
+          // Validar que X1 < X2
+          if (x1 >= x2) {
+            alert(`Error en ${nombre}: X1 (${x1}) debe ser menor que X2 (${x2})`);
+            return;
+          }
+          
+          // Generar los 3 rangos automáticamente
+          const rangos = [
+            `<${x1}`,
+            `${x1}-${x2}`,
+            `>${x2}`
+          ];
+          configuracionDiscretizacion[nombre] = rangos;
+        }
+      }
+
+      const tablaManual = document.getElementById("tablaManual");
+      let html = `<h3>Ingresa los valores para 10 instancias</h3>`;
+      
+      // Mostrar información de los rangos configurados
+      let infoRangos = "";
+      for (let attr of atributos) {
+        if (attr.tipo === "numerico" && configuracionDiscretizacion[attr.nombre]) {
+          infoRangos += `<li><strong>${attr.nombre}</strong>: ${configuracionDiscretizacion[attr.nombre].join(", ")}</li>`;
+        }
+      }
+      if (infoRangos) {
+        html += `<div style="background:#f0f8ff; padding:10px; border-radius:5px; margin-bottom:15px;">
+          <h4>Rangos generados automáticamente:</h4>
+          <ul>${infoRangos}</ul>
+        </div>`;
+      }
+      
+      html += `<table><tr>`;
+      atributos.forEach(attr => {
+        if (attr.tipo === "numerico") {
+          html += `<th>${attr.nombre} <br><small>(Selecciona rango)</small></th>`;
+        } else {
+          html += `<th>${attr.nombre} <br><small>(Nominal)</small></th>`;
+        }
+      });
+      html += `<th>Clase (1=Pos, 0=Neg)</th></tr>`;
+
+      for (let i = 0; i < 10; i++) {
+        html += `<tr>`;
+        atributos.forEach((attr, j) => {
+          if (attr.tipo === "nominal") {
+            html += `<td><input type="text" id="cell-${i}-${j}" placeholder="Ej: Alto, Bajo"></td>`;
+          } else {
+            // Para atributos numéricos, crear un select con los 3 rangos generados
+            html += `<td><select id="cell-${i}-${j}">`;
+            html += `<option value="">Seleccionar...</option>`;
+            if (configuracionDiscretizacion[attr.nombre]) {
+              configuracionDiscretizacion[attr.nombre].forEach(rango => {
+                html += `<option value="${rango}">${rango}</option>`;
+              });
+            }
+            html += `</select></td>`;
+          }
+        });
+        html += `<td><select id="cell-${i}-clase"><option value="1">1</option><option value="0">0</option></select></td>`;
+        html += `</tr>`;
+      }
+
+      html += `</table><button onclick="leerTablaManual()">Calcular Árbol</button>`;
+      tablaManual.innerHTML = html;
+    }
+
+    function leerTablaManual() {
+      const data = [];
+      const headers = atributos.map(a => a.nombre).concat("Clase");
+      data.push(headers);
+
+      for (let i = 0; i < 10; i++) {
+        let fila = [];
+        for (let j = 0; j < atributos.length; j++) {
+          let val;
+          
+          if (atributos[j].tipo === "numerico") {
+            // Para atributos numéricos, obtener el valor del select
+            val = document.getElementById(`cell-${i}-${j}`).value;
+            if (!val) {
+              alert(`Error en fila ${i + 1}, atributo ${atributos[j].nombre}. Debe seleccionar un rango.`);
+              return;
+            }
+          } else {
+            // Para atributos nominales, obtener el valor del input
+            val = document.getElementById(`cell-${i}-${j}`).value.trim();
+            if (!val) {
+              alert(`Error en fila ${i + 1}, atributo ${atributos[j].nombre}. Debe ingresar un valor.`);
+              return;
+            }
+          }
+          fila.push(val);
+        }
+        fila.push(parseInt(document.getElementById(`cell-${i}-clase`).value));
+        data.push(fila);
+      }
+
+      datosOriginales = data;
+      mostrarTablaOriginal(data);
+      calcularEntropiaGanancia(data);
+    }
+
+    function aplicarDiscretizacion(data) {
+      if (!data || data.length < 2) return data;
+      
+      const headers = data[0];
+      const datosDiscretizados = [headers.slice()]; // Copiar headers
+      
+      for (let i = 1; i < data.length; i++) {
+        const filaOriginal = data[i];
+        const filaDiscretizada = [];
+        
+        for (let j = 0; j < filaOriginal.length - 1; j++) { // Excluir la clase
+          const nombreAttr = headers[j];
+          const valor = filaOriginal[j];
+          
+          if (configuracionDiscretizacion[nombreAttr]) {
+            // Es un atributo numérico que debe discretizarse
+            const valorDiscretizado = discretizarValor(valor, configuracionDiscretizacion[nombreAttr]);
+            filaDiscretizada.push(valorDiscretizado);
+          } else {
+            // Es nominal o no necesita discretización
+            filaDiscretizada.push(valor);
+          }
+        }
+        
+        // Agregar la clase
+        filaDiscretizada.push(filaOriginal[filaOriginal.length - 1]);
+        datosDiscretizados.push(filaDiscretizada);
+      }
+      
+      return datosDiscretizados;
+    }
+
+    function discretizarValor(valor, rangos) {
+      for (let rango of rangos) {
+        if (valorPerteneceARango(valor, rango)) {
+          return rango;
+        }
+      }
+      return "No clasificado";
+    }
+
+    function valorPerteneceARango(valor, rango) {
+      // Parsear diferentes tipos de rangos
+      rango = rango.trim();
+      
+      // Menor que: <X
+      if (rango.startsWith('<')) {
+        const limite = parseFloat(rango.substring(1));
+        return valor < limite;
+      }
+      
+      // Menor o igual que: <=X
+      if (rango.startsWith('<=')) {
+        const limite = parseFloat(rango.substring(2));
+        return valor <= limite;
+      }
+      
+      // Mayor que: >X
+      if (rango.startsWith('>')) {
+        const limite = parseFloat(rango.substring(1));
+        return valor > limite;
+      }
+      
+      // Mayor o igual que: >=X
+      if (rango.startsWith('>=')) {
+        const limite = parseFloat(rango.substring(2));
+        return valor >= limite;
+      }
+      
+      // Rango: X-Y
+      if (rango.includes('-')) {
+        const partes = rango.split('-');
+        if (partes.length === 2) {
+          const min = parseFloat(partes[0]);
+          const max = parseFloat(partes[1]);
+          return valor >= min && valor <= max;
+        }
+      }
+      
+      // Si no coincide con ningún patrón, asumir igualdad exacta
+      return valor.toString() === rango;
+    }
+
+    function mostrarTablaOriginal(datos) {
+      let html = "<table><tr>";
+      datos[0].forEach(col => html += `<th>${col}</th>`);
+      html += "</tr>";
+      for (let i = 1; i < datos.length; i++) {
+        html += "<tr>";
+        datos[i].forEach(c => html += `<td>${c}</td>`);
+        html += "</tr>";
+      }
+      html += "</table>";
+      document.getElementById("tablaOriginal").innerHTML = html;
+    }
+
+    function mostrarTablaDiscretizada(datos) {
+      let html = "<table><tr>";
+      datos[0].forEach(col => html += `<th>${col}</th>`);
+      html += "</tr>";
+      for (let i = 1; i < datos.length; i++) {
+        html += "<tr>";
+        datos[i].forEach(c => html += `<td>${c}</td>`);
+        html += "</tr>";
+      }
+      html += "</table>";
+      document.getElementById("tablaDiscretizada").innerHTML = html;
+    }
+
+    function calcularEntropiaGanancia(data) {
+      const resultados = document.getElementById("resultados");
+      const headers = data[0];
+      const rows = data.slice(1);
+
+      const total = rows.length;
+      const pos = rows.filter(r => r[r.length - 1] == 1).length;
+      const neg = total - pos;
+      const entropyTotal = entropia(pos, neg);
+
+      let pasoAPaso = `<h3>Entropía General</h3>
+        <p>Total: ${total} instancias → Positivas: ${pos}, Negativas: ${neg}</p>
+        <p>Entropía = -(${pos}/${total})log2(${pos}/${total}) - (${neg}/${total})log2(${neg}/${total})</p>
+        <p><b>Entropía = ${entropyTotal.toFixed(4)}</b></p>`;
+
+      pasoAPaso += `<h3>Ganancias por atributo</h3>`;
+
+      let maxGain = -1;
+      let nodoRaiz = "";
+      for (let i = 0; i < headers.length - 1; i++) {
+        const map = {};
+        for (let r of rows) {
+          const val = r[i];
+          if (!map[val]) map[val] = { pos: 0, neg: 0 };
+          if (r[r.length - 1] == 1) map[val].pos++;
+          else map[val].neg++;
+        }
+
+        let e = 0;
+        let det = `<ul>`;
+        for (let key in map) {
+          const group = map[key];
+          const subtotal = group.pos + group.neg;
+          const eGroup = entropia(group.pos, group.neg);
+          e += (subtotal / total) * eGroup;
+          det += `<li><b>${key}</b> → ${group.pos} positivas, ${group.neg} negativas (Entropía = ${eGroup.toFixed(4)})</li>`;
+        }
+        det += `</ul>`;
+
+        const gain = entropyTotal - e;
+        pasoAPaso += `<h4>${headers[i]}</h4>${det}<p>Ganancia = ${entropyTotal.toFixed(4)} - ${e.toFixed(4)} = <b>${gain.toFixed(4)}</b></p>`;
+
+        if (gain > maxGain) {
+          maxGain = gain;
+          nodoRaiz = headers[i];
+        }
+      }
+
+      resultados.innerHTML = `
+        ${pasoAPaso}
+        <h3>Nodo Raíz</h3>
+        <p><b>${nodoRaiz}</b> (atributo con mayor ganancia)</p>
+      `;
+    }
+
+    function mostrarConfiguracionAplicada() {
+      let html = "<ul>";
+      for (let attr in configuracionDiscretizacion) {
+        html += `<li><b>${attr}</b>: ${configuracionDiscretizacion[attr].join(", ")}</li>`;
+      }
+      html += "</ul>";
+      return Object.keys(configuracionDiscretizacion).length > 0 ? html : "<p><em>No se aplicó discretización.</em></p>";
+    }
+
+    function entropia(p, n) {
+      const total = p + n;
+      if (p === 0 || n === 0) return 0;
+      const pp = p / total, pn = n / total;
+      return -pp * Math.log2(pp) - pn * Math.log2(pn);
+    }
+  </script>
+</body>
+</html>
