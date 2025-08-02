@@ -323,7 +323,8 @@ function limpiarPagina() {
     document.getElementById("atributosForm").innerHTML = "";
     document.getElementById("tablaManual").innerHTML = "";
     document.getElementById("tablaOriginal").innerHTML = "";
-    document.getElementById("resultados").innerHTML = "";
+    document.getElementById("resultados").style.display = "none";
+    document.getElementById("excelFile").value = "";
 
     // Opcional: Reiniciar el número de atributos a 3 por defecto
     document.getElementById("numAttrs").value = 3;
