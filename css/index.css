@@ -1,0 +1,214 @@
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #f5f8fa;
+        margin: 0;
+        padding: 40px 20px;
+        color: #333;
+        display: flex;
+        justify-content: center;
+    }
+
+    .container {
+        background: white;
+        max-width: 900px;
+        width: 100%;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgb(0 0 0 / 0.1);
+        padding: 30px 40px;
+    }
+
+    h1 {
+        color: #004e92;
+        text-align: center;
+        margin-bottom: 30px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+    }
+
+    h2 {
+        color: #007acc;
+        border-bottom: 2px solid #007acc;
+        padding-bottom: 5px;
+        margin-top: 40px;
+        margin-bottom: 20px;
+        font-weight: 600;
+    }
+
+    h3,
+    h4 {
+        color: #005aab;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+
+    label {
+        font-weight: 600;
+        margin-right: 10px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+        padding: 8px 12px;
+        border: 1.8px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+        width: 160px;
+        box-sizing: border-box;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+        border-color: #007acc;
+        outline: none;
+        box-shadow: 0 0 6px #007accaa;
+    }
+
+    button {
+        background-color: #007acc;
+        color: white;
+        padding: 10px 22px;
+        margin: 10px 8px 20px 0;
+        font-size: 15px;
+        font-weight: 600;
+        border: none;
+        border-radius: 7px;
+        cursor: pointer;
+        box-shadow: 0 3px 8px #007acc80;
+        transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+        background-color: #005aab;
+        box-shadow: 0 4px 14px #005aabcc;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 25px;
+        font-size: 15px;
+        box-shadow: 0 0 6px #ccc;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    th,
+    td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #e2e2e2;
+        text-align: center;
+    }
+
+    th {
+        background-color: #007acc;
+        color: white;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    tbody tr:nth-child(even) {
+        background-color: #f9faff;
+    }
+
+    tbody tr:hover {
+        background-color: #e6f0ff;
+    }
+
+    #resultados {
+        background: #eef6ff;
+        border: 1px solid #a9c9ff;
+        padding: 18px 20px;
+        border-radius: 8px;
+        font-size: 15px;
+        color: #004e92;
+        max-height: 400px;
+        overflow-y: auto;
+        box-shadow: inset 0 0 10px #a9c9ff66;
+    }
+
+    .discretization-config {
+        background: #dbeeff;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin: 12px 0 25px;
+        box-shadow: inset 0 0 8px #a9c9ff66;
+    }
+
+    .range-input {
+        margin: 8px 0;
+    }
+
+    .numeric-attr {
+        border-left: 4px solid #007acc;
+        padding-left: 15px;
+    }
+
+    select {
+        width: 100%;
+        max-width: 160px;
+    }
+
+    input[type="number"] {
+        max-width: 160px;
+    }
+
+    small {
+        color: #666;
+        font-weight: 400;
+    }
+
+    hr {
+        border: none;
+        border-top: 1px solid #d2d9e0;
+        margin: 18px 0;
+    }
+
+    /* Estilo input file personalizado */
+    #excelFile {
+        opacity: 0;
+        position: absolute;
+        width: 0.1px;
+        height: 0.1px;
+        overflow: hidden;
+        z-index: -1;
+    }
+
+    #excelFileLabel {
+        display: inline-block;
+        background-color: #007acc;
+        color: white;
+        padding: 10px 20px;
+        font-weight: 600;
+        border-radius: 7px;
+        cursor: pointer;
+        box-shadow: 0 3px 8px #007acc80;
+        transition: background-color 0.3s ease;
+        user-select: none;
+        margin-bottom: 15px;
+    }
+
+    #excelFileLabel:hover {
+        background-color: #005aab;
+        box-shadow: 0 4px 14px #005aabcc;
+    }
+
+    #archivoNombre {
+        font-style: italic;
+        margin-left: 15px;
+        color: #333;
+        font-size: 14px;
+        vertical-align: middle;
+    }
+
+    #resultados {
+        background: #f9f9f9;
+        border: 1px solid #ccc;
+        padding: 15px;
+        display: none;
+        /* oculto al inicio */
+    }
